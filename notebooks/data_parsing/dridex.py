@@ -1,27 +1,47 @@
 import pyshark
-from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor
 import csv
-from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+from collections import defaultdict
+import datetime
 import numpy as np
-import math
 
+
+
+# TCP flag mapping from hexadecimal to letters
+tcp_flag_mapping = {
+    0x01: 'FIN',
+    0x02: 'SYN',
+    0x04: 'RST',
+    0x08: 'PSH',
+    0x10: 'ACK',
+    0x20: 'URG',
+    0x40: 'ECE',
+    0x80: 'CWR'
+}
+
+def parse_timestamp(ts):
+    return datetime.datetime.fromtimestamp(float(ts))
+
+def parse_tcp_flags(flag_hex):
+    """Map TCP flags from hexadecimal to letters."""
+    flags = []
+    flag_hex = int(flag_hex, 16)  # Convert from hex to int for bit manipulation
+    for bit, letter in tcp_flag_mapping.items():
+        if flag_hex & bit:
+            flags.append(letter)
+    return ''.join(flags) if flags else 'UNK'
 
 def calculate_entropy(data):
-    """Calculate entropy for a sequence of bytes."""
-    if len(data) == 0:
+    """Calculate entropy of payload data."""
+    if not data:
         return 0
-    byte_counts = defaultdict(int)
-    for byte in data:
-        byte_counts[byte] += 1
-    entropy = 0
-    for count in byte_counts.values():
-        prob = count / len(data)
-        entropy -= prob * math.log2(prob)
-    return entropy
+    byte_arr = np.frombuffer(data.encode('utf-8', errors='ignore'), dtype=np.uint8)
+    prob = np.bincount(byte_arr, minlength=256) / len(byte_arr)
+    prob = prob[prob > 0]
+    return -np.sum(prob * np.log2(prob))
 
+def extract_packet_data(packet):
 
-def process_packet(packet):
     try:
         flow_key = (
             packet.ip.src,
@@ -30,133 +50,94 @@ def process_packet(packet):
             packet[packet.transport_layer].dstport,
             packet.highest_layer,
         )
+        print("Done with Flow Key")
+        # Extract payload, flags, and timestamp
+        payload_size = int(packet.length) - int(packet.ip.hdr_len)
+        payload = packet.tcp.payload if hasattr(packet.tcp, "payload") else ""
+        print("Done with payload")
+        entropy = calculate_entropy(payload)
+        timestamp = parse_timestamp(packet.sniff_timestamp)
+        flags = parse_tcp_flags(getattr(packet.tcp, "flags", "0")) if "TCP" in packet else "UNK"
+        print("Fuck it")
 
-        timestamp = float(packet.sniff_timestamp)
-        packet_length = int(packet.length)
-
-        # Determine whether the packet is encrypted
-        encrypted_bytes = int(packet.length) if hasattr(packet, "ssl") else 0
-
-        # Entropy only for packets with raw data
-        if hasattr(packet, "data"):
-            entropy = calculate_entropy(bytes(packet.data.binary_value))
-        else:
-            entropy = 0
-
-        return flow_key, timestamp, packet_length, encrypted_bytes, entropy
+        return flow_key, {
+            "timestamp": timestamp,
+            "payload_size": payload_size,
+            "entropy": entropy,
+            "flags": flags,
+        }
     except AttributeError:
         return None
 
-
-def process_packets_batch(file_path, start, end):
-    cap = pyshark.FileCapture(file_path, only_summaries=False, keep_packets=False, display_filter=f"frame.number >= {start} && frame.number <= {end}")
+def process_packets(file_path):
+    print("Opened")
+    cap = pyshark.FileCapture(file_path, only_summaries=False, keep_packets=False)
     flows = defaultdict(
         lambda: {
+            "timestamps": [],
+            "payload_sizes": [],
+            "entropies": [],
+            "flags": set(),
             "packets": 0,
             "total_bytes": 0,
-            "encrypted_bytes": 0,
-            "start_time": None,
-            "end_time": None,
-            "interpacket_sum": 0,
-            "min_interval": float("inf"),
-            "max_interval": 0,
-            "entropy_sum": 0,
-            "min_entropy": float("inf"),
-            "max_entropy": 0,
         }
     )
 
-    last_timestamps = {}
+    with ThreadPoolExecutor() as executor:
+        print("Started Executing")
 
-    for packet in cap:
-        result = process_packet(packet)
-        if result:
-            flow_key, timestamp, packet_length, encrypted_bytes, entropy = result
-            flow = flows[flow_key]
-            flow["packets"] += 1
-            flow["total_bytes"] += packet_length
-            flow["encrypted_bytes"] += encrypted_bytes
+        for result in executor.map(extract_packet_data, cap):
+            if result:
+                flow_key, packet_info = result
+                flow = flows[flow_key]
+                flow["timestamps"].append(packet_info["timestamp"])
+                flow["payload_sizes"].append(packet_info["payload_size"])
+                flow["entropies"].append(packet_info["entropy"])
+                flow["flags"].add(packet_info["flags"])
+                flow["packets"] += 1
+                flow["total_bytes"] += packet_info["payload_size"]
 
-            if flow["start_time"] is None:
-                flow["start_time"] = timestamp
-            flow["end_time"] = timestamp
-
-            # Interpacket intervals
-            if flow_key in last_timestamps:
-                interval = timestamp - last_timestamps[flow_key]
-                flow["interpacket_sum"] += interval
-                flow["min_interval"] = min(flow["min_interval"], interval)
-                flow["max_interval"] = max(flow["max_interval"], interval)
-            last_timestamps[flow_key] = timestamp
-
-            # Entropy
-            flow["entropy_sum"] += entropy
-            flow["min_entropy"] = min(flow["min_entropy"], entropy)
-            flow["max_entropy"] = max(flow["max_entropy"], entropy)
-
-    # Finalize interpacket averages
-    for flow in flows.values():
-        if flow["packets"] > 1:
-            flow["avg_interval"] = flow["interpacket_sum"] / (flow["packets"] - 1)
-        else:
-            flow["avg_interval"] = 0
-
-        if flow["min_interval"] == float("inf"):
-            flow["min_interval"] = 0
-
-        if flow["min_entropy"] == float("inf"):
-            flow["min_entropy"] = 0
+    # Post-process each flow
+        for flow in flows.values():
+            print("Started Flows")
+            timestamps = sorted(flow["timestamps"])
+            inter_packet_interval = np.diff([ts.timestamp() for ts in timestamps]) if len(timestamps) > 1 else [0]
+            flow["duration"] = (timestamps[-1] - timestamps[0]).total_seconds() if len(timestamps) > 1 else 0
+            flow["mean_payload_size"] = np.mean(flow["payload_sizes"]) if flow["payload_sizes"] else 0
+            flow["std_payload_size"] = np.std(flow["payload_sizes"]) if flow["payload_sizes"] else 0
+            flow["min_payload_size"] = min(flow["payload_sizes"]) if flow["payload_sizes"] else 0
+            flow["max_payload_size"] = max(flow["payload_sizes"]) if flow["payload_sizes"] else 0
+            flow["mean_entropy"] = np.mean(flow["entropies"]) if flow["entropies"] else 0
+            flow["min_entropy"] = min(flow["entropies"]) if flow["entropies"] else 0
+            flow["max_entropy"] = max(flow["entropies"]) if flow["entropies"] else 0
+            flow["flags"] = "".join(sorted(flow["flags"]))
+            flow["mean_inter_packet_interval"] = np.mean(inter_packet_interval) if flow["payload_sizes"] else 0
+            flow["min_inter_packet_interval"] = min(inter_packet_interval) if flow["payload_sizes"] else 0
+            flow["max_inter_packet_interval"] = max(inter_packet_interval) if flow["payload_sizes"] else 0
 
     return flows
 
-
-def merge_flows(all_flows):
-    final_flows = defaultdict(
-        lambda: {
-            "packets": 0,
-            "total_bytes": 0,
-            "encrypted_bytes": 0,
-            "duration": 0,
-            "avg_interval": 0,
-            "min_interval": float("inf"),
-            "max_interval": 0,
-            "avg_entropy": 0,
-            "min_entropy": float("inf"),
-            "max_entropy": 0,
-        }
-    )
-
-    for flows in all_flows:
-        for key, flow in flows.items():
-            final_flow = final_flows[key]
-            final_flow["packets"] += flow["packets"]
-            final_flow["total_bytes"] += flow["total_bytes"]
-            final_flow["encrypted_bytes"] += flow["encrypted_bytes"]
-            final_flow["duration"] += flow["end_time"] - flow["start_time"]
-
-            final_flow["avg_interval"] += flow["avg_interval"]
-            final_flow["min_interval"] = min(final_flow["min_interval"], flow["min_interval"])
-            final_flow["max_interval"] = max(final_flow["max_interval"], flow["max_interval"])
-
-            final_flow["avg_entropy"] += flow["entropy_sum"] / flow["packets"] if flow["packets"] > 0 else 0
-            final_flow["min_entropy"] = min(final_flow["min_entropy"], flow["min_entropy"])
-            final_flow["max_entropy"] = max(final_flow["max_entropy"], flow["max_entropy"])
-
-    return final_flows
-
-
 def write_to_csv(flows, file_name):
     fields = [
-        "Duration",
-        "Packets",
-        "Bytes",
-        "Encrypted Traffic Bytes",
-        "Avg Interpacket Interval",
-        "Min Interpacket Interval",
-        "Max Interpacket Interval",
-        "Avg Entropy",
-        "Min Entropy",
-        "Max Entropy",
+    "Duration",
+    "Source IP",
+    "Destination IP",
+    "Source Port",
+    "Destination Port",
+    "Protocol",
+    "Flags",
+    "Packets",
+    "Bytes",
+    "Mean Payload Size",
+    "Std Payload Size",
+    "Min Payload Size",
+    "Max Payload Size",
+    "Mean Entropy",
+    "Min Entropy",
+    "Max Entropy",
+    "Mean Inter-Packet Interval",
+    "Min Inter-Packet Interval",
+    "Max Inter-Packet Interval",
     ]
     with open(file_name, "w", newline="") as output_file:
         writer = csv.DictWriter(output_file, fieldnames=fields)
@@ -165,37 +146,33 @@ def write_to_csv(flows, file_name):
             writer.writerow(
                 {
                     "Duration": data["duration"],
+                    "Protocol": key[4],
+                    "Flags": data["flags"],
                     "Packets": data["packets"],
                     "Bytes": data["total_bytes"],
-                    "Encrypted Traffic Bytes": data["encrypted_bytes"],
-                    "Avg Interpacket Interval": data["avg_interval"],
-                    "Min Interpacket Interval": data["min_interval"],
-                    "Max Interpacket Interval": data["max_interval"],
-                    "Avg Entropy": data["avg_entropy"],
+                    "Mean Payload Size": data["mean_payload_size"],
+                    "Std Payload Size": data["std_payload_size"],
+                    "Min Payload Size": data["min_payload_size"],
+                    "Max Payload Size": data["max_payload_size"],
+                    "Mean Entropy": data["mean_entropy"],
                     "Min Entropy": data["min_entropy"],
                     "Max Entropy": data["max_entropy"],
+                    "Mean Inter-Packet Interval": data["mean_inter_packet_interval"],
+                    "Min Inter-Packet Interval": data["min_inter_packet_interval"],
+                    "Max Inter-Packet Interval": data["max_inter_packet_interval"],
+                    "Source IP": key[0],
+                    "Source Port": key[1],
+                    "Destination IP": key[2],
+                    "Destination Port": key[3],
                 }
             )
 
+# Path to the pcap file
+pcap_file_path = r"data/raw/pcap/dridex.pcap"
 
-def process_large_pcap(file_path, output_csv, batch_size=1000):
-    # Count total packets
-    cap = pyshark.FileCapture(file_path, only_summaries=True)
-    total_packets = sum(1 for _ in cap)
-    cap.close()
-
-    ranges = [(i, min(i + batch_size, total_packets)) for i in range(1, total_packets + 1, batch_size)]
-
-    all_flows = []
-    with ProcessPoolExecutor() as executor:
-        results = executor.map(lambda r: process_packets_batch(file_path, *r), ranges)
-        all_flows.extend(results)
-
-    final_flows = merge_flows(all_flows)
-    write_to_csv(final_flows, output_csv)
-
-
-# Run
-process_large_pcap("data/raw/pcap/dridex.pcap", "extracted_data.csv")
+# Extract data
+extracted_flows = process_packets(pcap_file_path)
+# Write data to CSV
+write_to_csv(extracted_flows, "data/raw/csv/dridex.csv")
 
 print("Data extraction and writing to CSV completed.")
