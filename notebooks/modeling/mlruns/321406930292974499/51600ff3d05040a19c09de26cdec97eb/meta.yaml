@@ -1,0 +1,15 @@
+artifact_uri: file:///home/yousinator/personal/C2-ML-Detection-Framework/notebooks/modeling/mlruns/321406930292974499/51600ff3d05040a19c09de26cdec97eb/artifacts
+end_time: 1736963243253
+entry_point_name: ''
+experiment_id: '321406930292974499'
+lifecycle_stage: active
+run_id: 51600ff3d05040a19c09de26cdec97eb
+run_name: Logistic Regression
+run_uuid: 51600ff3d05040a19c09de26cdec97eb
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1736963243237
+status: 4
+tags: []
+user_id: yousinator

@@ -1,0 +1,15 @@
+artifact_uri: file:///home/yousinator/personal/C2-ML-Detection-Framework/notebooks/modeling/mlruns/0/8cb8070d32b74d79a9620c1b97619556/artifacts
+end_time: 1736949653515
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 8cb8070d32b74d79a9620c1b97619556
+run_name: XGBoost
+run_uuid: 8cb8070d32b74d79a9620c1b97619556
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1736949651314
+status: 3
+tags: []
+user_id: yousinator

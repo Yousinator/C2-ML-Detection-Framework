@@ -1,0 +1,15 @@
+artifact_uri: file:///home/yousinator/personal/C2-ML-Detection-Framework/notebooks/modeling/mlruns/321406930292974499/15589fd925d049b6b076b929a27930e8/artifacts
+end_time: 1736963971652
+entry_point_name: ''
+experiment_id: '321406930292974499'
+lifecycle_stage: active
+run_id: 15589fd925d049b6b076b929a27930e8
+run_name: knn
+run_uuid: 15589fd925d049b6b076b929a27930e8
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1736963969491
+status: 3
+tags: []
+user_id: yousinator
