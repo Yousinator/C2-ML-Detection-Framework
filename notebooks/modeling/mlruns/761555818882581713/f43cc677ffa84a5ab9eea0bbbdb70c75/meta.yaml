@@ -1,0 +1,15 @@
+artifact_uri: file:///home/yousinator/personal/C2-ML-Detection-Framework/notebooks/modeling/mlruns/761555818882581713/f43cc677ffa84a5ab9eea0bbbdb70c75/artifacts
+end_time: 1738056071827
+entry_point_name: ''
+experiment_id: '761555818882581713'
+lifecycle_stage: active
+run_id: f43cc677ffa84a5ab9eea0bbbdb70c75
+run_name: Random Forest
+run_uuid: f43cc677ffa84a5ab9eea0bbbdb70c75
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1738056069377
+status: 3
+tags: []
+user_id: yousinator
