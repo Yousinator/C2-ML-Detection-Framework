@@ -1,0 +1,15 @@
+artifact_uri: file:///home/yousinator/personal/C2-ML-Detection-Framework/notebooks/modeling/mlruns/761555818882581713/7ae7534338e74dec901ef1136a5804eb/artifacts
+end_time: 1738077926896
+entry_point_name: ''
+experiment_id: '761555818882581713'
+lifecycle_stage: active
+run_id: 7ae7534338e74dec901ef1136a5804eb
+run_name: Decision Tree
+run_uuid: 7ae7534338e74dec901ef1136a5804eb
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1738077924810
+status: 3
+tags: []
+user_id: yousinator
