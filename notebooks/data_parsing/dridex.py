@@ -6,21 +6,22 @@ import datetime
 import numpy as np
 
 
-
 # TCP flag mapping from hexadecimal to letters
 tcp_flag_mapping = {
-    0x01: 'FIN',
-    0x02: 'SYN',
-    0x04: 'RST',
-    0x08: 'PSH',
-    0x10: 'ACK',
-    0x20: 'URG',
-    0x40: 'ECE',
-    0x80: 'CWR'
+    0x01: "FIN",
+    0x02: "SYN",
+    0x04: "RST",
+    0x08: "PSH",
+    0x10: "ACK",
+    0x20: "URG",
+    0x40: "ECE",
+    0x80: "CWR",
 }
+
 
 def parse_timestamp(ts):
     return datetime.datetime.fromtimestamp(float(ts))
+
 
 def parse_tcp_flags(flag_hex):
     """Map TCP flags from hexadecimal to letters."""
@@ -29,16 +30,18 @@ def parse_tcp_flags(flag_hex):
     for bit, letter in tcp_flag_mapping.items():
         if flag_hex & bit:
             flags.append(letter)
-    return ''.join(flags) if flags else 'UNK'
+    return "".join(flags) if flags else "UNK"
+
 
 def calculate_entropy(data):
     """Calculate entropy of payload data."""
     if not data:
         return 0
-    byte_arr = np.frombuffer(data.encode('utf-8', errors='ignore'), dtype=np.uint8)
+    byte_arr = np.frombuffer(data.encode("utf-8", errors="ignore"), dtype=np.uint8)
     prob = np.bincount(byte_arr, minlength=256) / len(byte_arr)
     prob = prob[prob > 0]
     return -np.sum(prob * np.log2(prob))
+
 
 def extract_packet_data(packet):
 
@@ -57,7 +60,11 @@ def extract_packet_data(packet):
         print("Done with payload")
         entropy = calculate_entropy(payload)
         timestamp = parse_timestamp(packet.sniff_timestamp)
-        flags = parse_tcp_flags(getattr(packet.tcp, "flags", "0")) if "TCP" in packet else "UNK"
+        flags = (
+            parse_tcp_flags(getattr(packet.tcp, "flags", "0"))
+            if "TCP" in packet
+            else "UNK"
+        )
         print("Fuck it")
 
         return flow_key, {
@@ -68,6 +75,7 @@ def extract_packet_data(packet):
         }
     except AttributeError:
         return None
+
 
 def process_packets(file_path):
     print("Opened")
@@ -97,47 +105,72 @@ def process_packets(file_path):
                 flow["packets"] += 1
                 flow["total_bytes"] += packet_info["payload_size"]
 
-    # Post-process each flow
+        # Post-process each flow
         for flow in flows.values():
             print("Started Flows")
             timestamps = sorted(flow["timestamps"])
-            inter_packet_interval = np.diff([ts.timestamp() for ts in timestamps]) if len(timestamps) > 1 else [0]
-            flow["duration"] = (timestamps[-1] - timestamps[0]).total_seconds() if len(timestamps) > 1 else 0
-            flow["mean_payload_size"] = np.mean(flow["payload_sizes"]) if flow["payload_sizes"] else 0
-            flow["std_payload_size"] = np.std(flow["payload_sizes"]) if flow["payload_sizes"] else 0
-            flow["min_payload_size"] = min(flow["payload_sizes"]) if flow["payload_sizes"] else 0
-            flow["max_payload_size"] = max(flow["payload_sizes"]) if flow["payload_sizes"] else 0
-            flow["mean_entropy"] = np.mean(flow["entropies"]) if flow["entropies"] else 0
+            inter_packet_interval = (
+                np.diff([ts.timestamp() for ts in timestamps])
+                if len(timestamps) > 1
+                else [0]
+            )
+            flow["duration"] = (
+                (timestamps[-1] - timestamps[0]).total_seconds()
+                if len(timestamps) > 1
+                else 0
+            )
+            flow["mean_payload_size"] = (
+                np.mean(flow["payload_sizes"]) if flow["payload_sizes"] else 0
+            )
+            flow["std_payload_size"] = (
+                np.std(flow["payload_sizes"]) if flow["payload_sizes"] else 0
+            )
+            flow["min_payload_size"] = (
+                min(flow["payload_sizes"]) if flow["payload_sizes"] else 0
+            )
+            flow["max_payload_size"] = (
+                max(flow["payload_sizes"]) if flow["payload_sizes"] else 0
+            )
+            flow["mean_entropy"] = (
+                np.mean(flow["entropies"]) if flow["entropies"] else 0
+            )
             flow["min_entropy"] = min(flow["entropies"]) if flow["entropies"] else 0
             flow["max_entropy"] = max(flow["entropies"]) if flow["entropies"] else 0
             flow["flags"] = "".join(sorted(flow["flags"]))
-            flow["mean_inter_packet_interval"] = np.mean(inter_packet_interval) if flow["payload_sizes"] else 0
-            flow["min_inter_packet_interval"] = min(inter_packet_interval) if flow["payload_sizes"] else 0
-            flow["max_inter_packet_interval"] = max(inter_packet_interval) if flow["payload_sizes"] else 0
+            flow["mean_inter_packet_interval"] = (
+                np.mean(inter_packet_interval) if flow["payload_sizes"] else 0
+            )
+            flow["min_inter_packet_interval"] = (
+                min(inter_packet_interval) if flow["payload_sizes"] else 0
+            )
+            flow["max_inter_packet_interval"] = (
+                max(inter_packet_interval) if flow["payload_sizes"] else 0
+            )
 
     return flows
 
+
 def write_to_csv(flows, file_name):
     fields = [
-    "Duration",
-    "Source IP",
-    "Destination IP",
-    "Source Port",
-    "Destination Port",
-    "Protocol",
-    "Flags",
-    "Packets",
-    "Bytes",
-    "Mean Payload Size",
-    "Std Payload Size",
-    "Min Payload Size",
-    "Max Payload Size",
-    "Mean Entropy",
-    "Min Entropy",
-    "Max Entropy",
-    "Mean Inter-Packet Interval",
-    "Min Inter-Packet Interval",
-    "Max Inter-Packet Interval",
+        "Duration",
+        "Source IP",
+        "Destination IP",
+        "Source Port",
+        "Destination Port",
+        "Protocol",
+        "Flags",
+        "Packets",
+        "Bytes",
+        "Mean Payload Size",
+        "Std Payload Size",
+        "Min Payload Size",
+        "Max Payload Size",
+        "Mean Entropy",
+        "Min Entropy",
+        "Max Entropy",
+        "Mean Inter-Packet Interval",
+        "Min Inter-Packet Interval",
+        "Max Inter-Packet Interval",
     ]
     with open(file_name, "w", newline="") as output_file:
         writer = csv.DictWriter(output_file, fieldnames=fields)
@@ -167,12 +200,13 @@ def write_to_csv(flows, file_name):
                 }
             )
 
+
 # Path to the pcap file
-pcap_file_path = r"data/raw/pcap/dridex.pcap"
+pcap_file_path = r"data/raw/pcap/collection.pcap"
 
 # Extract data
 extracted_flows = process_packets(pcap_file_path)
 # Write data to CSV
-write_to_csv(extracted_flows, "data/raw/csv/dridex.csv")
+write_to_csv(extracted_flows, "data/raw/csv/collection.csv")
 
 print("Data extraction and writing to CSV completed.")
