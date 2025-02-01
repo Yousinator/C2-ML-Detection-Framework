@@ -1,1 +1,0 @@
-Duration,Source IP,Destination IP,Source Port,Destination Port,Protocol,Flags,Packets,Bytes,Mean Payload Size,Std Payload Size,Min Payload Size,Max Payload Size,Mean Entropy,Min Entropy,Max Entropy,Mean Inter-Packet Intervals,Min Inter-Packet Intervals,Max Inter-Packet Intervals
