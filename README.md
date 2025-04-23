@@ -12,7 +12,7 @@
 
 # C2-ML-Detection-Framework
 
-A modular, ML-powered framework designed to detect command-and-control (C2) malware using network traffic data. Developed as part of a research project targeting the detection of polymorphic and metamorphic malware through sequence-aware deep learning models (e.g., LSTM).
+A modular, ML-powered framework designed to detect command-and-control (C2) malware using network traffic data. Developed as part of a research project targeting the detection of malware through sequence-aware deep learning models (e.g., LSTM).
 
 This framework is focused on experimentation, extensibility, and reproducibility — with full MLflow support and Python environment management via Poetry.
 
